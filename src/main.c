@@ -146,7 +146,7 @@ int loadUrl(Arguments* pArguments)
 	{
 		fclose(fpUrlList);
 		g_pMmapAddr = (uint32_t *) mmap(NULL, mmapAddrLength,
-		PROT_READ | PROT_WRITE, MAP_SHARED, fdDevice, 0);
+				PROT_READ | PROT_WRITE, MAP_SHARED, fdDevice, 0);
 	}
 	else
 	{
@@ -240,6 +240,11 @@ int loadUrl(Arguments* pArguments)
 			printf("DSP download url finished\n");
 			// TODO: get the information of the download status informations.
 			// TODO: display the download status informations.
+
+			// change the wt ctl of PC .so dsp wait the next write.
+			int wtConfig = LINKLAYER_IO_WRITE_FIN;
+			retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS,
+					&wtConfig);
 		}
 		else
 		{
@@ -252,8 +257,10 @@ int loadUrl(Arguments* pArguments)
 		printf("ioctl for waitReadBuffer status failed\n");
 	}
 
-	// TODO: release the resource.
-	// release the resource
+	// release the resource.
+	munmap(g_pMmapAddr, mmapAddrLength);
+	free(pLinkLayerBuffer);
+	close(fdDevice);
 
 	printf("loading list to dpu0 ...\n");
 	printf("done (1 loaded, 0 failed, %f ms elapsed).\n", (timeElapse / 1000));

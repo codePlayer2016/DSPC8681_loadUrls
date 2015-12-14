@@ -14,7 +14,10 @@ typedef enum IO_CMD
 
 typedef enum __tagLINKLAYER_IO_TYPE
 {
-	LINKLAYER_IO_READ = 0, LINKLAYER_IO_WRITE
+	LINKLAYER_IO_READ = 0,
+	LINKLAYER_IO_WRITE = 1,
+	LINKLAYER_IO_READ_FIN = 2,
+	LINKLAYER_IO_WRITE_FIN = 3
 } LINKLAYER_IO_TYPE;
 
 typedef struct _tagDPUDriver_WaitBufferReadyParam
