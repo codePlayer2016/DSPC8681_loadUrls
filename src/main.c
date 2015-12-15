@@ -100,10 +100,12 @@ int loadUrl(Arguments* pArguments)
 	char arrayUrlList[50 * 102];
 	char *pArrayUList = arrayUrlList;
 	int urlItmeNum = 0;
+	int wtConfig = 0;
 	uint32_t *g_pMmapAddr = NULL;
 	uint32_t mmapAddrLength = (4 * 1024 * 1024);
 	DPUDriver_WaitBufferReadyParam waitWriteBufferReadyParam;
 	int status = -1;
+	uint32_t *pUrlNums = NULL;
 
 	LinkLayerBuffer *pLinkLayerBuffer = (LinkLayerBuffer *) malloc(
 			sizeof(LinkLayerBuffer));
@@ -154,7 +156,7 @@ int loadUrl(Arguments* pArguments)
 		retVal = -4;
 	}
 
-	// polling the WT status register (can write or not).
+	// polling the dsp can be written to.
 	if ((int) g_pMmapAddr != -1)
 	{
 		printf("mmap finished\n");
@@ -162,6 +164,9 @@ int loadUrl(Arguments* pArguments)
 				+ PAGE_SIZE * 2);
 		pLinkLayerBuffer->pInBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
 				+ PAGE_SIZE * 2 * 2);
+
+		pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE
+				+ 3 * sizeof(4));
 		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_WRITE;
 		waitWriteBufferReadyParam.pendTime = WAITTIME;
 		waitWriteBufferReadyParam.pBufStatus = &status;
@@ -174,13 +179,14 @@ int loadUrl(Arguments* pArguments)
 		retVal = -5;
 	}
 
-	// write the url to output zone.
+	// write the url to output zone.write the urlNum to output zone.
 	if (retIoVal != -1)
 	{
 		printf("ioctl for waitWriteBuffer ready finished\n");
 		if (status == 0)
 		{
 			printf("writeBuffer ready\n");
+			memcpy(pUrlNums,&urlItmeNum,sizeof(int));
 			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
 					(urlItmeNum * URL_ITEM_SIZE));
 		}
@@ -195,12 +201,16 @@ int loadUrl(Arguments* pArguments)
 		printf("ioctl for waitWriteBuffer ready failed\n");
 		retVal = -7;
 	}
+	// set the pc can be written.
+	int rdConfig = LINKLAYER_IO_READ;
+	retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &rdConfig);
 
 	// change the WT ctl register (pc write over and dsp can read).
 	if ((retIoVal != -1) && (status == 0))
 	{
 		gettimeofday(&downloadStart, NULL);
-		int wtConfig = LINKLAYER_IO_WRITE;
+		wtConfig = LINKLAYER_IO_WRITE;
+		printf("pc write over\n");
 		//pc change the wt reg and dsp's rd reg status can be read in dsp
 		retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
 	}
@@ -240,9 +250,8 @@ int loadUrl(Arguments* pArguments)
 			printf("DSP download url finished\n");
 			// TODO: get the information of the download status informations.
 			// TODO: display the download status informations.
-
-			// change the wt ctl of PC .so dsp wait the next write.
-			int wtConfig = LINKLAYER_IO_WRITE_FIN;
+			// pc read the result over. and dsp need to polling.
+			int wtConfig = LINKLAYER_IO_READ_FIN;
 			retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS,
 					&wtConfig);
 		}
@@ -256,6 +265,10 @@ int loadUrl(Arguments* pArguments)
 	{
 		printf("ioctl for waitReadBuffer status failed\n");
 	}
+
+	// one com finished .init the register.
+	wtConfig = LINKLAYER_IO_WRITE_FIN;
+	retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
 
 	// release the resource.
 	munmap(g_pMmapAddr, mmapAddrLength);
