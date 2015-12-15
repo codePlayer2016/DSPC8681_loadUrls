@@ -9,6 +9,7 @@
 #include<stdlib.h>
 #include<stdint.h>
 #include<unistd.h>
+#include <string.h>
 #include<sys/stat.h>
 #include<sys/types.h>
 #include <sys/mman.h>
@@ -79,11 +80,53 @@ void showError(int retVal)
 int parseArguments(int argc, char **argv, Arguments* pArguments)
 {
 	int retVal = 0;
+	int index = 0;
+	if (argc == 5)
+	{
+		if (strcasecmp("-f", argv[1]) == 0)
+		{
+			pArguments->pUrlListPath = argv[2];
+			printf("the input file is %s\n", pArguments->pUrlListPath);
+		}
+		else
+		{
+			retVal = -1;
+			printf("error:input file is %s\n", argv[2]);
+		}
+
+		if ((retVal == 0) && (pArguments->pUrlListPath != NULL))
+		{
+			if (strcasecmp("-t", argv[3]) == 0)
+			{
+				pArguments->pDevicePath = argv[4];
+				printf("the device is %s\n", pArguments->pDevicePath);
+			}
+			else
+			{
+				retVal = -2;
+				printf("error:the device is %s\n", argv[4]);
+			}
+		}
+
+	}
+	else
+	{
+		printf("error:the para number is %d\n", argc);
+		retVal = -3;
+	}
+	if (retVal != 0)
+	{
+		showHelp(retVal);
+	}
+	return (retVal);
+
+#if 0
 	pArguments->pUrlListPath = "/home/hawke/urllist.txt";
 	pArguments->pDevicePath = "dpu0";
 
 	printf("the urlList file is %s\n", pArguments->pUrlListPath);
 	return (retVal);
+#endif
 }
 
 int loadUrl(Arguments* pArguments)
@@ -106,6 +149,8 @@ int loadUrl(Arguments* pArguments)
 	DPUDriver_WaitBufferReadyParam waitWriteBufferReadyParam;
 	int status = -1;
 	uint32_t *pUrlNums = NULL;
+	uint32_t *pDownloadPicNums = NULL;
+	uint32_t *pFailedPicNUms = NULL;
 
 	LinkLayerBuffer *pLinkLayerBuffer = (LinkLayerBuffer *) malloc(
 			sizeof(LinkLayerBuffer));
@@ -167,6 +212,13 @@ int loadUrl(Arguments* pArguments)
 
 		pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE
 				+ 3 * sizeof(4));
+		pDownloadPicNums =
+				(uint32_t *) ((uint8_t *) g_pMmapAddr + 3 * sizeof(4));
+
+		pFailedPicNUms = (uint32_t *) ((uint8_t *) g_pMmapAddr + 4 * sizeof(4));
+		printf("g_pMmapAddr=0x%x,pDownloadPicNums=0x%x,pDownloadPicNums=0x%x\n",
+				g_pMmapAddr, pDownloadPicNums, pFailedPicNUms);
+
 		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_WRITE;
 		waitWriteBufferReadyParam.pendTime = WAITTIME;
 		waitWriteBufferReadyParam.pBufStatus = &status;
@@ -186,7 +238,7 @@ int loadUrl(Arguments* pArguments)
 		if (status == 0)
 		{
 			printf("writeBuffer ready\n");
-			memcpy(pUrlNums,&urlItmeNum,sizeof(int));
+			memcpy(pUrlNums, &urlItmeNum, sizeof(int));
 			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
 					(urlItmeNum * URL_ITEM_SIZE));
 		}
@@ -251,6 +303,7 @@ int loadUrl(Arguments* pArguments)
 			// TODO: get the information of the download status informations.
 			// TODO: display the download status informations.
 			// pc read the result over. and dsp need to polling.
+			*pUrlNums = 0;
 			int wtConfig = LINKLAYER_IO_READ_FIN;
 			retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS,
 					&wtConfig);
@@ -270,13 +323,14 @@ int loadUrl(Arguments* pArguments)
 	wtConfig = LINKLAYER_IO_WRITE_FIN;
 	retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
 
+	printf("loading list to dpu0 ...\n");
+	printf("done (%d loaded, %d failed, %f ms elapsed).\n", *pDownloadPicNums,
+			*pFailedPicNUms, (timeElapse / 1000));
+
 	// release the resource.
 	munmap(g_pMmapAddr, mmapAddrLength);
 	free(pLinkLayerBuffer);
 	close(fdDevice);
-
-	printf("loading list to dpu0 ...\n");
-	printf("done (1 loaded, 0 failed, %f ms elapsed).\n", (timeElapse / 1000));
 	return (retVal);
 }
 int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
