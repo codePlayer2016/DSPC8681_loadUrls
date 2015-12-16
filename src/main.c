@@ -155,177 +155,215 @@ int loadUrl(Arguments* pArguments)
 	LinkLayerBuffer *pLinkLayerBuffer = (LinkLayerBuffer *) malloc(
 			sizeof(LinkLayerBuffer));
 
-	// fopen the device.
 	if (pLinkLayerBuffer != NULL)
 	{
 		pLinkLayerBuffer->inBufferLength = RDBUFLENGTH; //
 		pLinkLayerBuffer->outBufferLength = WTBUFLENGTH; //8k
-		fdDevice = open(dev_name, O_RDWR);
 	}
 	else
 	{
 		retVal = -1;
 	}
-
-	// get the url from the urlList.txt.
-	if (fdDevice >= 0)
-	{
-		printf("the open device is %s\n", dev_name);
-		fpUrlList = fopen(pArguments->pUrlListPath, "rb");
-	}
-	else
-	{
-		printf("pcie device open error\n");
-		retVal = -2;
-	}
-	if (fpUrlList != NULL)
-	{
-		retVal = getUrlList(fpUrlList, pArrayUList, &urlItmeNum);
-	}
-	else
-	{
-		printf("open the %s failed\n", pArguments->pUrlListPath);
-		retVal = -3;
-	}
-
-	// mmap and get the registers.
+	// fopen the device.
 	if (retVal == 0)
 	{
-		fclose(fpUrlList);
-		g_pMmapAddr = (uint32_t *) mmap(NULL, mmapAddrLength,
-				PROT_READ | PROT_WRITE, MAP_SHARED, fdDevice, 0);
-	}
-	else
-	{
-		printf("get url from urlList File failed\n");
-		retVal = -4;
-	}
-
-	// polling the dsp can be written to.
-	if ((int) g_pMmapAddr != -1)
-	{
-		printf("mmap finished\n");
-		pLinkLayerBuffer->pOutBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
-				+ PAGE_SIZE * 2);
-		pLinkLayerBuffer->pInBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
-				+ PAGE_SIZE * 2 * 2);
-
-		pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE
-				+ 3 * sizeof(4));
-		pDownloadPicNums =
-				(uint32_t *) ((uint8_t *) g_pMmapAddr + 3 * sizeof(4));
-
-		pFailedPicNUms = (uint32_t *) ((uint8_t *) g_pMmapAddr + 4 * sizeof(4));
-		printf("g_pMmapAddr=0x%x,pDownloadPicNums=0x%x,pDownloadPicNums=0x%x\n",
-				g_pMmapAddr, pDownloadPicNums, pFailedPicNUms);
-
-		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_WRITE;
-		waitWriteBufferReadyParam.pendTime = WAITTIME;
-		waitWriteBufferReadyParam.pBufStatus = &status;
-		retIoVal = ioctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
-				&waitWriteBufferReadyParam); // dsp should init the RD register to empty in DSP.
-	}
-	else
-	{
-		printf("mmap failed\n");
-		retVal = -5;
-	}
-
-	// write the url to output zone.write the urlNum to output zone.
-	if (retIoVal != -1)
-	{
-		printf("ioctl for waitWriteBuffer ready finished\n");
-		if (status == 0)
+		fdDevice = open(dev_name, O_RDWR);
+		if (fdDevice >= 0)
 		{
-			printf("writeBuffer ready\n");
-			memcpy(pUrlNums, &urlItmeNum, sizeof(int));
-			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
-					(urlItmeNum * URL_ITEM_SIZE));
+			printf("the open device is %s\n", dev_name);
 		}
 		else
 		{
-			printf("wait writeBuffer timeout\n");
-			retVal = -6;
+			printf("pcie device open error\n");
+			retVal = -2;
 		}
 	}
-	else
+	// get the url from the urlList.txt.
+	if (retVal == 0)
 	{
-		printf("ioctl for waitWriteBuffer ready failed\n");
-		retVal = -7;
-	}
-	// set the pc can be written.
-	int rdConfig = LINKLAYER_IO_READ;
-	retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &rdConfig);
-
-	// change the WT ctl register (pc write over and dsp can read).
-	if ((retIoVal != -1) && (status == 0))
-	{
-		gettimeofday(&downloadStart, NULL);
-		wtConfig = LINKLAYER_IO_WRITE;
-		printf("pc write over\n");
-		//pc change the wt reg and dsp's rd reg status can be read in dsp
-		retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
-	}
-	else
-	{
-	}
-
-	// TODO should change .pc should not read the picture downloaded by the DSP.
-	// polling the RD status register ((DSP read the url over and download picture over(DSP change the wt in dsp)) or not).
-	// means the url can be overwrite in the dsp zone.,the pc can write agian.
-	if (retIoVal != -1)
-	{
-		printf(
-				"change the RD status register in dsp by WT ctl register in PC\n");
-		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_READ;
-		waitWriteBufferReadyParam.pendTime = WAITTIME;
-		waitWriteBufferReadyParam.pBufStatus = &status;
-		// dsp change the wt ctl reg means pc can read.()
-		retIoVal = ioctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
-				&waitWriteBufferReadyParam);
-	}
-	else
-	{
-		printf("ioctl for changeWriteBuffer status failed\n");
-		retVal = -8;
-
-	}
-
-	if (retIoVal != -1)
-	{
-		printf("ioctl for polling RD status register finished\n");
-		if (status == 0)
+		fpUrlList = fopen(pArguments->pUrlListPath, "rb");
+		if (fpUrlList != NULL)
 		{
-			gettimeofday(&downloadEnd, NULL);
-			timeElapse = ((downloadEnd.tv_sec - downloadStart.tv_sec) * 1000000
-					+ (downloadEnd.tv_usec - downloadStart.tv_usec));
-			printf("DSP download url finished\n");
-			// TODO: get the information of the download status informations.
-			// TODO: display the download status informations.
-			// pc read the result over. and dsp need to polling.
-			*pUrlNums = 0;
-			int wtConfig = LINKLAYER_IO_READ_FIN;
+
+		}
+		else
+		{
+			printf("open the %s failed\n", pArguments->pUrlListPath);
+			retVal = -3;
+		}
+	}
+
+	if (retVal == 0)
+	{
+		retVal = getUrlList(fpUrlList, pArrayUList, &urlItmeNum);
+		if (retVal == 0)
+		{
+			fclose(fpUrlList);
+		}
+		else
+		{
+			printf("get url from urlList File failed\n");
+			retVal = -4;
+		}
+	}
+	// mmap and get the registers.
+	if (retVal == 0)
+	{
+		g_pMmapAddr = (uint32_t *) mmap(NULL, mmapAddrLength,
+				PROT_READ | PROT_WRITE, MAP_SHARED, fdDevice, 0);
+		// polling the dsp can be written to.
+		if ((int) g_pMmapAddr != -1)
+		{
+			printf("mmap finished\n");
+			pLinkLayerBuffer->pOutBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
+					+ PAGE_SIZE * 2);
+			pLinkLayerBuffer->pInBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
+					+ PAGE_SIZE * 2 * 2);
+
+			pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE
+					+ 3 * sizeof(4));
+			pDownloadPicNums = (uint32_t *) ((uint8_t *) g_pMmapAddr
+					+ 3 * sizeof(4));
+
+			pFailedPicNUms = (uint32_t *) ((uint8_t *) g_pMmapAddr
+					+ 4 * sizeof(4));
+			printf(
+					"g_pMmapAddr=0x%x,pDownloadPicNums=0x%x,pDownloadPicNums=0x%x\n",
+					g_pMmapAddr, pDownloadPicNums, pFailedPicNUms);
+
+			waitWriteBufferReadyParam.waitType = LINKLAYER_IO_WRITE;
+			waitWriteBufferReadyParam.pendTime = WAITTIME;
+			waitWriteBufferReadyParam.pBufStatus = &status;
+			retIoVal = ioctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
+					&waitWriteBufferReadyParam); // dsp should init the RD register to empty in DSP.
+		}
+		else
+		{
+			printf("mmap failed\n");
+			retVal = -5;
+		}
+	}
+
+	// write the url to output zone.write the urlNum to output zone.
+	if (retVal == 0)
+	{
+		if (retIoVal != -1)
+		{
+			printf("ioctl for waitWriteBuffer ready finished\n");
+			if (status == 0)
+			{
+				printf("writeBuffer ready\n");
+				memcpy(pUrlNums, &urlItmeNum, sizeof(int));
+				memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
+						(urlItmeNum * URL_ITEM_SIZE));
+			}
+			else
+			{
+				printf("wait writeBuffer timeout\n");
+				retVal = -6;
+			}
+		}
+		else
+		{
+			printf("ioctl for waitWriteBuffer ready failed\n");
+			retVal = -7;
+		}
+	}
+
+	// set the pc can be written.
+	if (retVal == 0)
+	{
+		int rdConfig = LINKLAYER_IO_READ;
+		retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &rdConfig);
+		if (retIoVal != -1)
+		{
+			gettimeofday(&downloadStart, NULL);
+			wtConfig = LINKLAYER_IO_WRITE;
+			printf("pc write over\n");
+			//pc change the wt reg and dsp's rd reg status can be read in dsp
 			retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS,
 					&wtConfig);
 		}
 		else
 		{
-			printf("wait readBuffer status timeout\n");
-			retVal = -9;
+			retVal=-8;
 		}
+	}
+
+	// TODO should change .pc should not read the picture downloaded by the DSP.
+	// polling the RD status register ((DSP read the url over and download picture over(DSP change the wt in dsp)) or not).
+	// means the url can be overwrite in the dsp zone.,the pc can write agian.
+	if (retVal == 0)
+	{
+		if (retIoVal != -1)
+		{
+			printf(
+					"change the RD status register in dsp by WT ctl register in PC\n");
+			waitWriteBufferReadyParam.waitType = LINKLAYER_IO_READ;
+			waitWriteBufferReadyParam.pendTime = WAITTIME;
+			waitWriteBufferReadyParam.pBufStatus = &status;
+			// dsp change the wt ctl reg means pc can read.()
+			retIoVal = ioctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
+					&waitWriteBufferReadyParam);
+		}
+		else
+		{
+			printf("ioctl for changeWriteBuffer status failed\n");
+			retVal = -9;
+
+		}
+	}
+
+	if (retVal == 0)
+	{
+		if (retIoVal != -1)
+		{
+			printf("ioctl for polling RD status register finished\n");
+			if (status == 0)
+			{
+				gettimeofday(&downloadEnd, NULL);
+				timeElapse = ((downloadEnd.tv_sec - downloadStart.tv_sec)
+						* 1000000
+						+ (downloadEnd.tv_usec - downloadStart.tv_usec));
+				printf("DSP download url finished\n");
+				// TODO: get the information of the download status informations.
+				// TODO: display the download status informations.
+				// pc read the result over. and dsp need to polling.
+				*pUrlNums = 0;
+				int wtConfig = LINKLAYER_IO_READ_FIN;
+				retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS,
+						&wtConfig);
+			}
+			else
+			{
+				printf("wait readBuffer status timeout\n");
+				retVal = -10;
+			}
+		}
+		else
+		{
+			retVal = -11;
+			printf("ioctl for waitReadBuffer status failed\n");
+		}
+	}
+
+
+	if (retVal==0)
+	{
+		printf("loading list to dpu0 ...\n");
+		printf("done (%d loaded, %d failed, %f ms elapsed).\n",
+				*pDownloadPicNums, *pFailedPicNUms, (timeElapse / 1000));
 	}
 	else
 	{
-		printf("ioctl for waitReadBuffer status failed\n");
 	}
 
+
 	// one com finished .init the register.
+	*pUrlNums = 0;
 	wtConfig = LINKLAYER_IO_WRITE_FIN;
 	retIoVal = ioctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
 
-	printf("loading list to dpu0 ...\n");
-	printf("done (%d loaded, %d failed, %f ms elapsed).\n", *pDownloadPicNums,
-			*pFailedPicNUms, (timeElapse / 1000));
 
 	// release the resource.
 	munmap(g_pMmapAddr, mmapAddrLength);
