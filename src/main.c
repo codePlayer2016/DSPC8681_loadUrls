@@ -130,6 +130,7 @@ int parseArguments(int argc, char **argv, Arguments* pArguments)
 
 int loadUrl(Arguments* pArguments)
 {
+	//hello
 	int retVal = 0;
 	int retIoVal = 0;
 	float timeElapse = 0;
