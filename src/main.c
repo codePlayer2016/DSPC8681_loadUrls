@@ -275,6 +275,8 @@ int loadUrl(Arguments* pArguments)
 	uint32_t *pUrlNums = NULL;
 	uint32_t *pDownloadPicNums = NULL;
 	uint32_t *pFailedPicNUms = NULL;
+	int downloadPicNums = 0;
+	int failLoadPicNums = 0;
 
 	LinkLayerBuffer *pLinkLayerBuffer = (LinkLayerBuffer *) malloc(
 			sizeof(LinkLayerBuffer));
@@ -356,7 +358,6 @@ int loadUrl(Arguments* pArguments)
 	{
 		if (status == 0)
 		{
-
 			//VabWrite(int handle,void *out_buffer, int nbyte);
 			memcpy(pUrlNums, &urlItmeNum, sizeof(int));
 			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
