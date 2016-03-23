@@ -290,7 +290,6 @@ int loadUrl(Arguments* pArguments)
 		return retVal;
 	}
 	// fopen the device.
-
 	fdDevice = VabOpen(dev_name, O_RDWR);
 	if (fdDevice < 0)
 	{
@@ -299,7 +298,6 @@ int loadUrl(Arguments* pArguments)
 
 	}
 	// get the url from the urlList.txt.
-
 	fpUrlList = fopen(pArguments->pUrlListPath, "rb");
 	if (fpUrlList != NULL)
 	{
@@ -325,12 +323,10 @@ int loadUrl(Arguments* pArguments)
 	}
 
 	// mmap and get the registers.
-	g_pMmapAddr = VabMmap(NULL, mmapAddrLength, PROT_READ | PROT_WRITE,
-			MAP_SHARED, fdDevice, 0);
+	g_pMmapAddr = VabMmap(NULL, mmapAddrLength, PROT_READ | PROT_WRITE,MAP_SHARED, fdDevice, 0);
 	// polling the dsp can be written to.
 	if ((int) g_pMmapAddr != -1)
 	{
-
 		VabSeek(pLinkLayerBuffer->pOutBuffer, PAGE_SIZE * 2, g_pMmapAddr);
 
 		VabSeek(pLinkLayerBuffer->pInBuffer, PAGE_SIZE * 2 * 2, g_pMmapAddr);
@@ -363,7 +359,8 @@ int loadUrl(Arguments* pArguments)
 
 			//VabWrite(int handle,void *out_buffer, int nbyte);
 			memcpy(pUrlNums, &urlItmeNum, sizeof(int));
-			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,(urlItmeNum * URL_ITEM_SIZE));
+			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
+					(urlItmeNum * URL_ITEM_SIZE));
 			printf("loading list to dpu0 ...\n");
 		}
 		else
@@ -419,7 +416,6 @@ int loadUrl(Arguments* pArguments)
 		retVal = -9;
 		return retVal;
 
-
 	}
 
 	if (retIoVal != -1)
@@ -454,29 +450,11 @@ int loadUrl(Arguments* pArguments)
 			return retVal;
 		}
 	}
-
-
-
-	if (retVal==0)
-	{
-		printf("loading list to dpu0 ...\n");
-		printf("done (%d loaded, %d failed, %f ms elapsed).\n",
-				*pDownloadPicNums, *pFailedPicNUms, (timeElapse / 1000));
-	}
-
-	else
-	{
-		retVal = -11;
-		printf("ioctl for waitReadBuffer status failed\n");
-		return retVal;
-	}
-
-	printf("done (%d loaded, %d failed, %f ms elapsed).\n", downloadPicNums,
-			failLoadPicNums, (timeElapse / 1000));
+	printf("loading list to dpu0 ...\n");
+	printf("done (%d loaded, %d failed, %f ms elapsed).\n", downloadPicNums,failLoadPicNums, (timeElapse / 1000));
 	// init for the next instance.
 	failLoadPicNums = 0;
 	downloadPicNums = 0;
-
 
 	// one com finished .init the register.
 	*pUrlNums = 0;
@@ -484,7 +462,6 @@ int loadUrl(Arguments* pArguments)
 	retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
 
 	//VabRead(int handle,void *in_buffer, int nbyte);
-
 
 	// release the resource.
 	VabMunmap(g_pMmapAddr, mmapAddrLength);
