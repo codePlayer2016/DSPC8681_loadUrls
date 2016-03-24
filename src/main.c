@@ -69,7 +69,9 @@ int VabRead(int handle, void *in_buffer, int nbyte);
  * buffer:to be operation ptr; offset:size fromwhere:mmap return virt addr
  * return:success or not
  */
-int VabSeek(uint32_t* buffer, long offset, uint32_t * fromwhere);
+off_t VabSeek(int fd, off_t offset, int whence);
+
+unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,gd_set* ed,struct timeval*timeout);
 /**
  * start:mmap start addr; length:mmap length; prot:mmap region protect ways;
  * flags:mmap region feature; handle:file handle; offsize:mmap offset;
@@ -150,19 +152,6 @@ uint32_t * VabMmap(void *start, size_t length, int prot, int flags, int fd,
 	}
 
 }
-int VabSeek(uint32_t* buffer, long offset, uint32_t * fromwhere)
-{
-	buffer = (uint32_t *) ((uint8_t *) fromwhere + offset);
-	if (buffer != NULL)
-	{
-		return 0;
-	}
-	else
-	{
-		printf("seek error\n");
-		return -1;
-	}
-}
 int VabIoctl(int handle, int command, void *args)
 {
 	int retVal;
@@ -177,6 +166,58 @@ int VabIoctl(int handle, int command, void *args)
 		printf("ioctl error\n");
 		return -1;
 	}
+}
+int VabRead(int handle, void *in_buffer, int nbyte){
+	int rd=0;
+	rd=read(handle,	in_buffer,nbyte);
+	if(rd<0){
+		printf("read error\n");
+		return rd;
+	}
+	else{
+		return rd;
+	}
+}
+int VabWrite(int handle, void *out_buffer, int nbyte){
+	int wd=0;
+	wd=write(handle,out_buffer,nbyte);
+	if(wd<0){
+		printf("write error\n");
+		return wd;
+	}
+	else{
+		return wd;
+	}
+}
+off_t VabSeek(int fd, off_t offset, int whence)
+{
+	int ret;
+	ret=lseek(fd, offset,whence);
+
+	if (ret>=0)
+	{
+		return ret;
+	}
+	else
+	{
+		printf("seek error\n");
+		return -1;
+	}
+}
+unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,gd_set* ed,struct timeval*timeout){
+	fd_set rfds,wfds;
+	FD_ZERO(&rfds);
+	FD_ZERO(&rfds);
+	FD_SET(fd,&rfds);
+	FD_SET(fd_wfds);
+	select(fd+1,&rfds,&wfds,NULL,NULL);
+	if(FD_ISSET(fd,&rfds)){
+		printf("poll monitor:can be read\n");
+	}
+	if(FD_ISSET(fd,&wfds)){
+					printf("poll monitor:can be written\n");
+	}
+
 }
 void VabMunmap(uint32_t addr, int size)
 {
@@ -329,19 +370,21 @@ int loadUrl(Arguments* pArguments)
 	// polling the dsp can be written to.
 	if ((int) g_pMmapAddr != -1)
 	{
-		VabSeek(pLinkLayerBuffer->pOutBuffer, PAGE_SIZE * 2, g_pMmapAddr);
 
-		VabSeek(pLinkLayerBuffer->pInBuffer, PAGE_SIZE * 2 * 2, g_pMmapAddr);
+		pLinkLayerBuffer->pOutBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE * 2);
 
-		VabSeek(pUrlNums, PAGE_SIZE + 3 * sizeof(4), g_pMmapAddr);
+		pLinkLayerBuffer->pInBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE * 2 * 2);
 
-		VabSeek(pDownloadPicNums, 3 * sizeof(4), g_pMmapAddr);
+		pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE + 3 * sizeof(4));
 
-		VabSeek(pFailedPicNUms, 4 * sizeof(4), g_pMmapAddr);
+		pDownloadPicNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + 3 * sizeof(4));
+
+		pFailedPicNUms = (uint32_t *) ((uint8_t *) g_pMmapAddr + 4 * sizeof(4));
 
 		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_WRITE;
 		waitWriteBufferReadyParam.pendTime = WAITTIME;
 		waitWriteBufferReadyParam.pBufStatus = &status;
+		//This codes can be replaced by poll
 		retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
 				&waitWriteBufferReadyParam);
 		// dsp should init the RD register to empty in DSP.
@@ -358,6 +401,7 @@ int loadUrl(Arguments* pArguments)
 	{
 		if (status == 0)
 		{
+			//if we do not use mmap,we can use write/read,but mmap is better because it is faster than write/read
 			//VabWrite(int handle,void *out_buffer, int nbyte);
 			memcpy(pUrlNums, &urlItmeNum, sizeof(int));
 			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
@@ -462,6 +506,7 @@ int loadUrl(Arguments* pArguments)
 	wtConfig = LINKLAYER_IO_WRITE_FIN;
 	retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
 
+	//we can get data from Inbuffer directly,and we also can get data using read
 	//VabRead(int handle,void *in_buffer, int nbyte);
 
 	// release the resource.
