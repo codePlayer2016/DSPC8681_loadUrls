@@ -8,7 +8,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<stdint.h>
-#include<cstddef.h>
+#include<sys/select.h>
 #include<unistd.h>
 #include <string.h>
 #include<sys/stat.h>
@@ -18,6 +18,7 @@
 #include<fcntl.h>
 #include<sys/ioctl.h>
 #include<string.h>
+
 #include"DPU_ioctl.h"
 #include "LinkLayer.h"
 
@@ -71,7 +72,7 @@ int VabRead(int handle, void *in_buffer, int nbyte);
  */
 off_t VabSeek(int fd, off_t offset, int whence);
 
-unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,gd_set* ed,struct timeval*timeout);
+unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,fd_set* ed,struct timeval*timeout);
 /**
  * start:mmap start addr; length:mmap length; prot:mmap region protect ways;
  * flags:mmap region feature; handle:file handle; offsize:mmap offset;
@@ -84,7 +85,7 @@ uint32_t * VabMmap(void *start, size_t length, int prot, int flags, int handle,
  * addr:mmap addr; size:mmap size;
  * return null
  */
-void VabMunmap(uint32_t* addr, int size);
+int VabMunmap(uint32_t* addr, int size);
 
 /**
  * function:function check;
@@ -143,12 +144,12 @@ uint32_t * VabMmap(void *start, size_t length, int prot, int flags, int fd,
 	if ((int) MmapAddr != -1)
 	{
 		printf("mmap success!\n");
-		return MmapAdddr;
+		return MmapAddr;
 	}
 	else
 	{
 		printf("mmap failed\n");
-		return MmapAdddr;
+		return MmapAddr;
 	}
 
 }
@@ -204,12 +205,12 @@ off_t VabSeek(int fd, off_t offset, int whence)
 		return -1;
 	}
 }
-unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,gd_set* ed,struct timeval*timeout){
+unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,fd_set* ed,struct timeval*timeout){
 	fd_set rfds,wfds;
 	FD_ZERO(&rfds);
 	FD_ZERO(&rfds);
 	FD_SET(fd,&rfds);
-	FD_SET(fd_wfds);
+	FD_SET(fd,&wfds);
 	select(fd+1,&rfds,&wfds,NULL,NULL);
 	if(FD_ISSET(fd,&rfds)){
 		printf("poll monitor:can be read\n");
@@ -219,7 +220,7 @@ unsigned int VabSelect(int fd,fd_set*rd,fd_set*wd,gd_set* ed,struct timeval*time
 	}
 
 }
-void VabMunmap(uint32_t addr, int size)
+int VabMunmap(uint32_t *addr, int size)
 {
 	munmap(addr, size);
 }
