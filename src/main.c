@@ -589,6 +589,16 @@ int loadUrl(Arguments* pArguments)
 	printf("loading list to dpu0 ...\n");
 	printf("done (%d loaded, %d failed, %f ms elapsed).\n", downloadPicNums,
 			failLoadPicNums, (timeElapse / 1000));
+	if(VabTrue(retIoVal)){
+		//send interrupt to dsp,and notify dsp one thing that pc have read finish.
+		retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_INTERRUPT, NULL);
+		if(VabTrue(retIoVal)){
+			printf("notify dsp success ...\n");
+		}
+		else{
+			printf("notify dsp failed ...\n");
+		}
+	}
 	// init for the next instance.
 	failLoadPicNums = 0;
 	downloadPicNums = 0;
