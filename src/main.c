@@ -95,7 +95,8 @@ int VabMunmap(uint32_t* addr, int size);
  */
 int VabError(int handle);
 int VabTrue(int retValue);
-
+DPUDriver_WaitBufferReadyParam VabParamAssign(int waitType, uint32_t pendTime, int32_t * status);
+void VabGetInfo(uint32_t * mmapAddr,uint32_t **urlNums, uint32_t **downloadPicNums, uint32_t **failedPicNUms);
 void showHelp(int retVal);
 void showError(int retVal);
 int parseArguments(int argc, char **argv, Arguments* pArguments);
@@ -161,14 +162,12 @@ int VabIoctl(int handle, int command, void *args)
 	retVal = ioctl(handle, command, args);
 	if (retVal != -1)
 	{
-		printf("ioctl success\n");
-		return retVal;
 	}
 	else
 	{
 		printf("ioctl error\n");
-		return -1;
 	}
+	return retVal;
 }
 int VabRead(int handle, void *in_buffer, int nbyte)
 {
@@ -232,10 +231,6 @@ unsigned int VabSelect(int fd, fd_set*rd, fd_set*wd, fd_set* ed,
 	}
 
 }
-int VabMunmap(uint32_t *addr, int size)
-{
-	munmap(addr, size);
-}
 int VabTrue(int retValue)
 {
 	if (retValue != -1)
@@ -246,6 +241,29 @@ int VabTrue(int retValue)
 	{
 		return 0;
 	}
+}
+DPUDriver_WaitBufferReadyParam VabParamAssign(int waitType, uint32_t pendTime, int32_t * status)
+{
+	DPUDriver_WaitBufferReadyParam  readyParam;
+	readyParam.waitType = waitType;
+	readyParam.pendTime = pendTime;
+	readyParam.pBufStatus = status;
+	printf("readyParam.waitType,readyParam.pendTime %d,%d\n",readyParam.waitType,readyParam.pendTime);
+	return readyParam;
+}
+void VabGetInfo(uint32_t * mmapAddr,uint32_t **urlNums, uint32_t **downloadPicNums, uint32_t **failedPicNUms)
+{
+
+	*urlNums =(uint32_t *) ((uint8_t *) mmapAddr + PAGE_SIZE + 3 * sizeof(4));
+
+	*downloadPicNums = (uint32_t *) ((uint8_t *) mmapAddr + 3 * sizeof(4));
+
+	*failedPicNUms = (uint32_t *) ((uint8_t *) mmapAddr + 4 * sizeof(4));
+
+}
+int VabMunmap(uint32_t *addr, int size)
+{
+	munmap(addr, size);
 }
 void VabClose(int handle)
 {
@@ -261,12 +279,9 @@ void showHelp(int retVal)
 	printf("-f <url-list>\n");
 	printf("\t input the url-list file\n");
 }
-
 void showError(int retVal)
 {
-
 }
-
 int parseArguments(int argc, char **argv, Arguments* pArguments)
 {
 	int retVal = 0;
@@ -318,7 +333,6 @@ int parseArguments(int argc, char **argv, Arguments* pArguments)
 	return (retVal);
 #endif
 }
-
 int loadUrl(Arguments* pArguments)
 {
 	int retVal = 0;
@@ -345,6 +359,8 @@ int loadUrl(Arguments* pArguments)
 
 	LinkLayerBuffer *pLinkLayerBuffer = (LinkLayerBuffer *) malloc(
 			sizeof(LinkLayerBuffer));
+
+
 
 	if (pLinkLayerBuffer != NULL)
 	{
@@ -398,25 +414,16 @@ int loadUrl(Arguments* pArguments)
 
 		pLinkLayerBuffer->pOutBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
 				+ PAGE_SIZE * 2);
-
 		pLinkLayerBuffer->pInBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr
 				+ PAGE_SIZE * 2 * 2);
 
-		pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE
-				+ 3 * sizeof(4));
+		VabGetInfo(g_pMmapAddr,&pUrlNums, &pDownloadPicNums,&pFailedPicNUms);
 
-		pDownloadPicNums =
-				(uint32_t *) ((uint8_t *) g_pMmapAddr + 3 * sizeof(4));
-
-		pFailedPicNUms = (uint32_t *) ((uint8_t *) g_pMmapAddr + 4 * sizeof(4));
-
-		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_WRITE;
-		waitWriteBufferReadyParam.pendTime = WAITTIME;
-		waitWriteBufferReadyParam.pBufStatus = &status;
-		//This codes can be replaced by poll
+		waitWriteBufferReadyParam=VabParamAssign(LINKLAYER_IO_WRITE, WAITTIME,&status);
+		// dsp should init the RD register to empty in DSP.
 		retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
 				&waitWriteBufferReadyParam);
-		// dsp should init the RD register to empty in DSP.
+
 	}
 	else
 	{
@@ -430,8 +437,6 @@ int loadUrl(Arguments* pArguments)
 	{
 		if (status == 0)
 		{
-			//if we do not use mmap,we can use write/read,but mmap is better because it is faster than write/read
-			//VabWrite(int handle,void *out_buffer, int nbyte);
 			memcpy(pUrlNums, &urlItmeNum, sizeof(int));
 			memcpy(pLinkLayerBuffer->pOutBuffer, arrayUrlList,
 					(urlItmeNum * URL_ITEM_SIZE));
@@ -485,7 +490,8 @@ int loadUrl(Arguments* pArguments)
 
 	//send interrupt from pc to dsp, notify dsp,the pc have writen url finish
 	retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_INTERRUPT, NULL);
-	printf("we start send interrupt to dsp,and notify dsp one thing that pc have wirten finish\n");
+	printf(
+			"we start send interrupt to dsp,and notify dsp one thing that pc have wirten finish\n");
 
 	// TODO should change .pc should not read the picture downloaded by the DSP.
 	// polling the RD status register ((DSP read the url over and download picture over(DSP change the wt in dsp)) or not).
@@ -494,9 +500,7 @@ int loadUrl(Arguments* pArguments)
 	if (VabTrue(retIoVal))
 	{
 
-		waitWriteBufferReadyParam.waitType = LINKLAYER_IO_READ;
-		waitWriteBufferReadyParam.pendTime = WAITTIME;
-		waitWriteBufferReadyParam.pBufStatus = &status;
+		waitWriteBufferReadyParam=VabParamAssign(LINKLAYER_IO_READ, WAITTIME,&status);
 		// dsp change the wt ctl reg means pc can read.()
 		retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_WAITBUFFERREADY,
 				&waitWriteBufferReadyParam);
@@ -555,10 +559,6 @@ int loadUrl(Arguments* pArguments)
 				timeElapse = ((downloadEnd.tv_sec - downloadStart.tv_sec)
 						* 1000000
 						+ (downloadEnd.tv_usec - downloadStart.tv_usec));
-				//printf("DSP download url finished\n");
-				/*NOTE: dsp finished the download.wait for pc reading.can add read information code here.
-				 NOTE: init some parameters in the dsp-side.
-				 */
 				// read the download status.
 				downloadPicNums = *pDownloadPicNums;
 				failLoadPicNums = *pFailedPicNUms;
@@ -589,13 +589,16 @@ int loadUrl(Arguments* pArguments)
 	printf("loading list to dpu0 ...\n");
 	printf("done (%d loaded, %d failed, %f ms elapsed).\n", downloadPicNums,
 			failLoadPicNums, (timeElapse / 1000));
-	if(VabTrue(retIoVal)){
+	if (VabTrue(retIoVal))
+	{
 		//send interrupt to dsp,and notify dsp one thing that pc have read finish.
 		retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_INTERRUPT, NULL);
-		if(VabTrue(retIoVal)){
+		if (VabTrue(retIoVal))
+		{
 			printf("notify dsp success ...\n");
 		}
-		else{
+		else
+		{
 			printf("notify dsp failed ...\n");
 		}
 	}
@@ -607,9 +610,6 @@ int loadUrl(Arguments* pArguments)
 	*pUrlNums = 0;
 	wtConfig = LINKLAYER_IO_WRITE_FIN;
 	retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &wtConfig);
-
-	//we can get data from Inbuffer directly,and we also can get data using read
-	//VabRead(int handle,void *in_buffer, int nbyte);
 
 	// release the resource.
 	VabMunmap(g_pMmapAddr, mmapAddrLength);
