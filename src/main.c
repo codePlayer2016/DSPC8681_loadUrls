@@ -248,7 +248,6 @@ DPUDriver_WaitBufferReadyParam VabParamAssign(int waitType, uint32_t pendTime, i
 	readyParam.waitType = waitType;
 	readyParam.pendTime = pendTime;
 	readyParam.pBufStatus = status;
-	printf("readyParam.waitType,readyParam.pendTime %d,%d\n",readyParam.waitType,readyParam.pendTime);
 	return readyParam;
 }
 void VabGetInfo(uint32_t * mmapAddr,uint32_t **urlNums, uint32_t **downloadPicNums, uint32_t **failedPicNUms)
