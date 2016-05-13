@@ -28,13 +28,14 @@
 #define WTBUFLENGTH (2*4*1024)
 #define RDBUFLENGTH (4*1024*1024-4*4*1024)
 #define URL_ITEM_SIZE (102)
+#define URLNUM (4)
 
 typedef struct _tagArguments
 {
 	char *pUrlListPath;
 	char *pDevicePath;
 } Arguments;
-
+static int i=0;
 //API encapsulation  Vab means video accelarate board
 /**
  * dev_name:open device name; flag:open operation;
@@ -619,13 +620,16 @@ int loadUrl(Arguments* pArguments)
 int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 {
 	int retVal = 0;
+
 	char urlItem[256];
 	char *pUrlItem = urlItem;
 	char *pArrayUrlList = pUrlList;
 	int enterCharPos = 0;
 	int urlItemNum = 0;
-	while (fgets(pUrlItem, 256, fpUrlList) != NULL)
+	while (i<URLNUM)
+	//while (fgets(pUrlItem, 256, fpUrlList) != NULL)
 	{
+		fgets(pUrlItem, 256, fpUrlList);
 		if (strlen(pUrlItem) > 20)
 		{
 			enterCharPos = 0;
@@ -640,6 +644,7 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 		{
 			continue;
 		}
+		i++;
 	}
 	*pUrlItmeNum = urlItemNum;
 	printf("the url item Num is %d\n", *pUrlItmeNum);
