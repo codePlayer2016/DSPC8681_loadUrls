@@ -1,7 +1,8 @@
 #ifndef _TEST_CMD_H
 #define _TEST_CMD_H
 
-#include <sys/ioctl.h>
+//#include <sys/ioctl.h>
+#include <linux/ioctl.h>
 #if 0
 typedef enum IO_CMD
 {
@@ -26,7 +27,12 @@ typedef struct _tagDPUDriver_WaitBufferReadyParam
 	uint32_t pendTime;
 	int32_t *pBufStatus;
 } DPUDriver_WaitBufferReadyParam, *DPUDriver_WaitBufferReadyParamPtr;
-
+typedef struct _tagInterruptAndPollParam
+{
+	int interruptAndPollDirect;
+	int interruptAndPollResult;
+	uint32_t pollTime;
+} interruptAndPollParam, *pInterruptAndPollParam;
 #define  NULL ((void *)0)
 #define READBUFFER_FULL (0x55aa55aa)
 #define WRITEBUFFER_EMPTY (0xaa55aa55)
@@ -46,7 +52,8 @@ typedef struct _tagDPUDriver_WaitBufferReadyParam
 #define DPU_IO_CMD_WRITE_TIMEOUT _IOWR(PCIEDRIVER_MAGIC,0x108,LINKLAYER_IO_TYPE)
 #define DPU_IO_CMD_READ_TIMEOUT _IOWR(PCIEDRIVER_MAGIC,0x109,LINKLAYER_IO_TYPE)
 
-#define DPU_IO_CMD_INTERRUPT _IOW(PCIEDRIVER_MAGIC,0x110,NULL)
+#define DPU_IO_CMD_INTERRUPT _IOWR(PCIEDRIVER_MAGIC,0x106,interruptAndPollParam)
+
 
 #endif
 #endif//_TEST_CMD_H
