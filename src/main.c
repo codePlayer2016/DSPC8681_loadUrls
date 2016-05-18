@@ -36,7 +36,6 @@ typedef struct _tagArguments
 	char *pDevicePath;
 } Arguments;
 
-FILE *fpUrlList = NULL;
 //API encapsulation  Vab means video accelarate board
 
 void showHelp(int retVal);
@@ -284,7 +283,7 @@ int loadUrl(Arguments* pArguments)
 	struct timeval downloadStart;
 	struct timeval downloadEnd;
 	int fdDevice = 0;
-	//FILE *fpUrlList = NULL;
+	FILE *fpUrlList = NULL;
 	const char dev_name[] = "/dev/DPU_driver_linux";
 	char arrayUrlList[50 * 102];
 	char *pArrayUList = arrayUrlList;
@@ -302,7 +301,6 @@ int loadUrl(Arguments* pArguments)
 	interruptAndPollParam interruptPollParams;
 	interruptAndPollParam *pInterruptPollParams =
 			(interruptAndPollParam *) &interruptPollParams;
-
 
 	LinkLayerBuffer *pLinkLayerBuffer = (LinkLayerBuffer *) malloc(
 			sizeof(LinkLayerBuffer));
@@ -325,32 +323,23 @@ int loadUrl(Arguments* pArguments)
 		return fdDevice;
 
 	}
-	if (fpUrlList == NULL)
+
+	// get the url from the urlList.txt.
+	fpUrlList = fopen(pArguments->pUrlListPath, "rb");
+	if (fpUrlList != NULL)
 	{
-		// get the url from the urlList.txt.
-		fpUrlList = fopen(pArguments->pUrlListPath, "rb");
-		if (fpUrlList != NULL)
-		{
-			printf("open file success!\n");
-		}
-		else
-		{
-			printf("open the %s failed\n", pArguments->pUrlListPath);
-			retVal = -3;
-			return retVal;
-		}
+		printf("open file success!\n");
 	}
 	else
 	{
-		// we need not open urlList second.
-		printf("we need not open urlList second!\n");
+		printf("open the %s failed\n", pArguments->pUrlListPath);
+		retVal = -3;
+		return retVal;
 	}
 
 	retVal = getUrlList(fpUrlList, pArrayUList, &urlItmeNum);
 	if (retVal == 0)
 	{
-		//printf("fseek success!\n");
-		//fseek(fpUrlList,0L,SEEK_CUR);
 		fclose(fpUrlList);
 	}
 	else
@@ -427,7 +416,6 @@ int loadUrl(Arguments* pArguments)
 
 	}
 
-
 	// set the pc can be written.
 	int rdConfig = LINKLAYER_IO_READ;
 	retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &rdConfig);
@@ -447,9 +435,10 @@ int loadUrl(Arguments* pArguments)
 
 	//send interrupt from pc to dsp, notify dsp,the pc have writen url finish
 	pInterruptPollParams->interruptAndPollDirect = 0;
-	retIoVal=ioctl(fdDevice, DPU_IO_CMD_INTERRUPT, pInterruptPollParams);
+	retIoVal = ioctl(fdDevice, DPU_IO_CMD_INTERRUPT, pInterruptPollParams);
 	//retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_INTERRUPT, pInterruptPollParams);
-	printf("we start send interrupt to dsp,and notify dsp one thing that pc have wirten finish\n");
+	printf(
+			"we start send interrupt to dsp,and notify dsp one thing that pc have wirten finish\n");
 
 	// TODO should change .pc should not read the picture downloaded by the DSP.
 	// polling the RD status register ((DSP read the url over and download picture over(DSP change the wt in dsp)) or not).
@@ -490,6 +479,7 @@ int loadUrl(Arguments* pArguments)
 			failLoadPicNums = *pFailedPicNUms;
 
 			// init the urlNums to DSP
+			memset(pLinkLayerBuffer->pOutBuffer, 0x0,(urlItmeNum * URL_ITEM_SIZE));
 			*pUrlNums = 0;
 
 			// pc read the finished.single the DSP.
@@ -523,6 +513,7 @@ int loadUrl(Arguments* pArguments)
 				failLoadPicNums = *pFailedPicNUms;
 
 				// init the urlNums to DSP
+				memset(pLinkLayerBuffer->pOutBuffer, 0x0,(urlItmeNum * URL_ITEM_SIZE));
 				*pUrlNums = 0;
 
 				// pc read the finished.single the DSP.
@@ -548,6 +539,9 @@ int loadUrl(Arguments* pArguments)
 	printf("loading list to dpu0 ...\n");
 	printf("done (%d loaded, %d failed, %f ms elapsed).\n", downloadPicNums,
 			failLoadPicNums, (timeElapse / 1000));
+
+
+
 	if (VabTrue(retIoVal))
 	{
 		//send interrupt to dsp,and notify dsp one thing that pc have read finish.
@@ -605,7 +599,7 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 		}
 		i++;
 	}
-	i=0;
+	i = 0;
 	*pUrlItmeNum = urlItemNum;
 	printf("the url item Num is %d\n", *pUrlItmeNum);
 	return (retVal);
