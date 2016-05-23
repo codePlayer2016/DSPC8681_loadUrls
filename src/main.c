@@ -479,7 +479,7 @@ int loadUrl(Arguments* pArguments)
 			failLoadPicNums = *pFailedPicNUms;
 
 			// init the urlNums to DSP
-			memset(pLinkLayerBuffer->pOutBuffer, 0x0,(urlItmeNum * URL_ITEM_SIZE));
+			memset(pLinkLayerBuffer->pOutBuffer, 0,(urlItmeNum * URL_ITEM_SIZE));
 			*pUrlNums = 0;
 
 			// pc read the finished.single the DSP.
@@ -579,10 +579,10 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 	char *pArrayUrlList = pUrlList;
 	int enterCharPos = 0;
 	int urlItemNum = 0;
-	//while (fgets(pUrlItem, 256, fpUrlList) != NULL)
-	while (i < URLNUM)
+	while (fgets(pUrlItem, 256, fpUrlList) != NULL)
+	//while (i < URLNUM)
 	{
-		fgets(pUrlItem, 256, fpUrlList);
+		//fgets(pUrlItem, 256, fpUrlList);
 		if (strlen(pUrlItem) > 20)
 		{
 			enterCharPos = 0;
@@ -597,9 +597,9 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 		{
 			continue;
 		}
-		i++;
+		//i++;
 	}
-	i = 0;
+	//i = 0;
 	*pUrlItmeNum = urlItemNum;
 	printf("the url item Num is %d\n", *pUrlItmeNum);
 	return (retVal);
