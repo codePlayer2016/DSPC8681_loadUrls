@@ -470,10 +470,7 @@ int loadUrl(Arguments* pArguments)
 			gettimeofday(&downloadEnd, NULL);
 			timeElapse = ((downloadEnd.tv_sec - downloadStart.tv_sec) * 1000000
 					+ (downloadEnd.tv_usec - downloadStart.tv_usec));
-			//printf("DSP download url finished\n");
-			/*NOTE: dsp finished the download.wait for pc reading.can add read information code here.
-			 NOTE: init some parameters in the dsp-side.
-			 */
+
 			// read the download status.
 			downloadPicNums = *pDownloadPicNums;
 			failLoadPicNums = *pFailedPicNUms;
@@ -580,9 +577,7 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 	int enterCharPos = 0;
 	int urlItemNum = 0;
 	while (fgets(pUrlItem, 256, fpUrlList) != NULL)
-	//while (i < URLNUM)
 	{
-		//fgets(pUrlItem, 256, fpUrlList);
 		if (strlen(pUrlItem) > 20)
 		{
 			enterCharPos = 0;
@@ -597,9 +592,7 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 		{
 			continue;
 		}
-		//i++;
 	}
-	//i = 0;
 	*pUrlItmeNum = urlItemNum;
 	printf("the url item Num is %d\n", *pUrlItmeNum);
 	return (retVal);
