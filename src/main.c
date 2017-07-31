@@ -19,6 +19,8 @@
 #include<sys/ioctl.h>
 #include<string.h>
 
+#include <pthread.h>
+
 #include"DPU_ioctl.h"
 #include "LinkLayer.h"
 
@@ -393,26 +395,15 @@ int loadUrl(Arguments* pArguments)
 	pLinkLayerBuffer->pOutBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE * 2);
 	pLinkLayerBuffer->pInBuffer = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE * 2 * 2);
 
-	// TODO this is error:
-	//VabGetInfo(g_pMmapAddr, &pUrlNums, &pDownloadPicNums, &pFailedPicNUms);
 	pUrlNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + PAGE_SIZE + 3 * sizeof(uint32_t));
 	///getPicNumers---getPicNumers ,read from dsp.
 	pDownloadPicNums = (uint32_t *) ((uint8_t *) g_pMmapAddr + 5 * sizeof(uint32_t));
 	///failPicNumers---failPicNumers,read from dsp.
 	pFailedPicNUms = (uint32_t *) ((uint8_t *) g_pMmapAddr + 6 * sizeof(uint32_t));
 
-//		LINKLAYER_IO_WRITE_RESET = 1,
-//		LINKLAYER_IO_WRITE_QRESET = 2,
-//		LINKLAYER_IO_WRITE_FIN = 3,
-//		LINKLAYER_IO_WRITE_QFIN = 4,
-
-	//waitWriteBufferReadyParam = VabParamAssign(LINKLAYER_IO_WRITE, WAITTIME, &status); //error!
-	//DPUDriver_WaitBufferReadyParam VabParamAssign(int waitType, uint32_t pendTime, int32_t * status)
-	//* 1.set the write reset.
-
 	/****************************************pc write to dsp*********************/
 	{
-		//PC_WT_RESET
+		//* 1.set the write reset.//PC_WT_RESET
 		LINKLAYER_IO_TYPE statusChangeCode = LINKLAYER_IO_WRITE_RESET;
 		retIoVal = VabIoctl(fdDevice, DPU_IO_CMD_CHANGEBUFFERSTATUS, &statusChangeCode);
 		//* 2.wai the dsp read reset.//DSP_RD_RESET
@@ -918,3 +909,139 @@ debug_printf("the url item Num is %d\n", *pUrlItmeNum);
 return (retVal);
 }
 #endif
+
+//
+//  int retVal=0;
+//  while(1)
+//  {
+//  		retVal=producePicture();
+//  		if(retVal!=1)
+//  		{
+//  			debug_printf("error:");
+//  			return(retVal);
+//  		}
+//  		lock(&mutex);
+//  		if(picBufSize<=thresholdLevel)
+//  		{
+//  			producePictoQueue();//include updateQueue();
+//  			picBufSize++;
+//  			updatePicBufSize();
+//  		}
+//  		cond_signal(&mutex,&cond);
+//  		unlock(&mutex);
+//  }
+//
+//  int retVal=0;
+//  while(1)
+//  {
+//  		lock(&mutex);
+//  		while(picBufSize<0)
+//  		{
+//  			cond_wait(&cond);
+//  		}
+//  		consumePicFromQueue();
+//  		picBufSize--;
+//  		updatePicBufSize();
+//  		unlock(&mutex);
+//  }
+
+typedef struct _tagPicElem
+{
+	int *pPicLength;
+	uint8_t *pPicData;
+//struct _tagPicElem *pNext;
+} picElem_t;
+
+typedef struct _tagPicQueue
+{
+	int nQueueLength;
+	int nQueueMaxSize;
+	int picDataHead;
+	int picDataTail;
+	pthread_mutex_t *pMutex;
+	pthread_cond_t *pCond;
+} picQueue_t;
+
+#define PIC_QUEQUE_MAX_SIZE (16)
+picElem_t *picElemts[PIC_QUEQUE_MAX_SIZE];
+
+void initPicQueue(picQueue_t *pPicQueue)
+{
+	picQueue_t *pSrc = pPicQueue;
+	pSrc->nQueueLength = 0;
+	pSrc->nQueueMaxSize = PIC_QUEQUE_MAX_SIZE;
+	pSrc->picDataHead = 0;
+	pSrc->picDataTail = 0;
+	pthread_mutex_init(pSrc->pMutex, NULL);
+	pthread_cond_init(pSrc->pCond, NULL);
+}
+
+void producePictoQueue(picQueue_t *pPicQueue, picElem_t *pPicElemt)
+{
+	picQueue_t *pSrc = pPicQueue;
+	pthread_mutex_lock(pSrc->pMutex);
+
+	while (pSrc->nQueueLength == pSrc->nQueueMaxSize)
+	{
+		// It's full wait read.
+		pthread_cond_wait(pSrc->pCond, pSrc->pMutex);
+	}
+	pSrc->picDataHead = (pSrc->picDataHead + 1) % (pSrc->nQueueMaxSize);
+	picElemts[pSrc->picDataHead] = pPicElemt;
+	pSrc->nQueueLength++;
+	if (pSrc->nQueueLength == 1)
+	{
+		pthread_cond_signal(pSrc->pCond);
+	}
+	pthread_mutex_unlock(pSrc->pMutex);
+}
+
+//void consumePicFromQueue(picQueue_t *pPicQueue		//,struct writeContext_t *pWriteContext);
+void consumePicFromQueue(picQueue_t *pPicQueue)
+{
+	picQueue_t *pSrc = pPicQueue;
+	pthread_mutex_lock(pSrc->pMutex);
+	while (0 == pSrc->nQueueLength)
+	{
+		pthread_cond_wait(pSrc->pCond, pSrc->pMutex);
+	}
+	pSrc->picDataTail = (pSrc->picDataTail + 1) % pSrc->nQueueMaxSize;
+	// read
+	//{
+
+	//}
+	pSrc->nQueueLength--;
+	if (pSrc->nQueueLength == pSrc->nQueueMaxSize - 1)
+	{
+		pthread_cond_signal(pSrc->pCond);
+	}
+	pthread_mutex_unlock(pSrc->pMutex);
+
+}
+
+void *singleProducer()
+{
+	int retVal = 0;
+	while (1)
+	{
+		// read pic file from the picList and init the pDest. getPicFromPicList(File *fp,picElem_t *pDest);
+		retVal = getPicFromPicList(fp, pPictureData);
+		if (retVal != 1)
+		{
+			debug_printf("error:\n");
+			break;
+		}
+		else if (retVal == 0)
+		{
+			debug_printf("waring:the read Pic finished\n");
+			break;
+		}
+		producePictoQueue(pPicQueue, pPictureData);
+	}
+}
+
+void *singleConsumer()
+{
+
+}
+
