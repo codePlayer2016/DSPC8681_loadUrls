@@ -40,6 +40,13 @@ typedef struct _tagArguments
 } Arguments;
 
 //API encapsulation  Vab means video accelarate board
+typedef struct _tagPictureInfo
+{
+	uint8_t *pData;
+	int picLength;
+} pictureInfo_t;
+
+pictureInfo_t *pictureList[10];
 
 void showHelp(int retVal);
 void showError(int retVal);
@@ -47,7 +54,7 @@ int parseArguments(int argc, char **argv, Arguments* pArguments);
 int loadUrl(Arguments* pArguments);
 int getUrlList(FILE *fpUrlList, char *pArrayUrlList, int *pUrlItmeNum);
 uint32_t * VabMmap(void *start, size_t length, int prot, int flags, int fd, off_t offsize);
-
+static int send10Pictures(char *PicListFileName, unsigned char *pDest, int *picCount);
 int main(int argc, char **argv)
 {
 	// TODO: -f <url list file>
@@ -389,6 +396,14 @@ int loadUrl(Arguments* pArguments)
 		retVal = -4;
 		return retVal;
 	}
+
+	int index = 0;
+	while (index < 10)
+	{
+		pictureList[index] = (pictureInfo_t *) malloc(sizeof(pictureInfo_t));
+		index++;
+	}
+
 	// mmap and get the registers.
 	g_pMmapAddr = VabMmap(NULL, mmapAddrLength, PROT_READ | PROT_WRITE, MAP_SHARED, fdDevice, 0);
 
@@ -415,6 +430,7 @@ int loadUrl(Arguments* pArguments)
 
 		//* 3.write.
 		{
+#if 0
 			if (status == 0)
 			{
 				memcpy(pUrlNums, &urlItemNum, sizeof(int));
@@ -427,6 +443,9 @@ int loadUrl(Arguments* pArguments)
 				retVal = -6;
 				return retVal;
 			}
+#endif
+			send10Pictures("/home/jack/Pictures/picList.txt", (unsigned char *) (pLinkLayerBuffer->pOutBuffer), (int *)pUrlNums);
+			//debug_printf("pUrlNums=%x\n", *pUrlNums);
 		}
 
 		//* 4.set the write finish.//PC_WT_FINISH
@@ -676,6 +695,61 @@ int getUrlList(FILE *fpUrlList, char *pUrlList, int *pUrlItmeNum)
 	}
 	*pUrlItmeNum = urlItemNum;
 	debug_printf("the url item Num is %d\n", *pUrlItmeNum);
+	return (retVal);
+}
+static int send10Pictures(char *PicListFileName, unsigned char *pDest, int *picCount)
+{
+	int retVal = 0;
+	unsigned char *pOutputDestIndex = pDest;
+	int debug_picLimit = 10;
+	int picIndex = 0;
+	char picFileName[256];
+	int newLinePos = 0;
+	int fileSize = 0;
+
+	FILE *fpPic = NULL;
+
+	FILE *fpPicList = fopen(PicListFileName, "rb");
+	if (NULL == fpPicList)
+	{
+		debug_printf("error:fopen\n");
+		return (retVal);
+	}
+
+	while (fgets(picFileName, 256, fpPicList) && (picIndex < debug_picLimit))
+	{
+		newLinePos = strlen(picFileName) - strlen("\n");
+		picFileName[newLinePos] = '\0';
+		fpPic = fopen(picFileName, "rb");
+		if (NULL == fpPic)
+		{
+			debug_printf("error\n");
+			return (retVal);
+		}
+		fseek(fpPic, 0, SEEK_END);
+		fileSize = ftell(fpPic);
+		fseek(fpPic, 0, SEEK_SET);
+		debug_printf("fileName=%s,fileSize=%d\n", picFileName, fileSize);
+
+		memcpy(pOutputDestIndex, &fileSize, sizeof(int));
+		debug_printf("len=%d\n", *(int * )pOutputDestIndex);
+
+		pOutputDestIndex += sizeof(int);
+
+		pictureList[picIndex]->pData = pOutputDestIndex;
+
+		pictureList[picIndex]->picLength = fread(pictureList[picIndex]->pData, sizeof(char), fileSize, fpPic);
+		if (0 == pictureList[picIndex]->picLength)
+		{
+			debug_printf("error\n");
+			return (retVal);
+		}
+		//debug_printf("fread%d byte from the file\n", pictureList[picIndex]->picLength);
+		pOutputDestIndex += pictureList[picIndex]->picLength;
+		picIndex++;
+
+	}
+	*picCount = picIndex;
 	return (retVal);
 }
 
@@ -1018,7 +1092,7 @@ void consumePicFromQueue(picQueue_t *pPicQueue)
 	pthread_mutex_unlock(pSrc->pMutex);
 
 }
-
+#if 0
 void *singleProducer()
 {
 	int retVal = 0;
@@ -1042,6 +1116,10 @@ void *singleProducer()
 
 void *singleConsumer()
 {
+	int retVal=0;
+	while(1)
+	{
 
+	}
 }
-
+#endif
