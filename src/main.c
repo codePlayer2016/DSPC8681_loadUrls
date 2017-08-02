@@ -444,7 +444,7 @@ int loadUrl(Arguments* pArguments)
 				return retVal;
 			}
 #endif
-			send10Pictures("/home/jack/Pictures/picList.txt", (unsigned char *) (pLinkLayerBuffer->pOutBuffer), (int *)pUrlNums);
+			send10Pictures("/home/jack/Pictures/picList.txt", (unsigned char *) (pLinkLayerBuffer->pOutBuffer), (int *) pUrlNums);
 			//debug_printf("pUrlNums=%x\n", *pUrlNums);
 		}
 
@@ -745,7 +745,7 @@ static int send10Pictures(char *PicListFileName, unsigned char *pDest, int *picC
 			return (retVal);
 		}
 		//debug_printf("fread%d byte from the file\n", pictureList[picIndex]->picLength);
-		pOutputDestIndex += pictureList[picIndex]->picLength;
+		pOutputDestIndex += ((pictureList[picIndex]->picLength + 3) / 4) * 4;
 		picIndex++;
 
 	}
